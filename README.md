@@ -18,7 +18,7 @@ This is a fork of [dermotte/liresolr](https://github.com/dermotte/liresolr) cust
 - [Apache Solr 7](http://lucene.apache.org/solr/)
 
 ### Installing
-- Download jar files built by travis-CI from [releases](releases)
+- Download jar files built by travis-CI from [GitHub Releases](https://github.com/soruly/liresolr/releases)
 - Copy both `lire.jar` and `liresolr.jar` to `/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/`
 - restart solr
 
