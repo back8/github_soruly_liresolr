@@ -862,17 +862,18 @@ public class LireRequestHandler extends RequestHandlerBase {
      *
      * @param hashes
      * @param paramField
-     * @param i
+     * @param size       in [0, 4096]
      * @return
      */
-    private BooleanQuery createQuery(int[] hashes, String paramField, int i) {
+    private BooleanQuery createQuery(int[] hashes, String paramField, int size) {
         List<String> hList = orderHashes(hashes, paramField, true);
+        int numHashes = (int) Math.min(hList.size(), size);
 
         BooleanQuery.Builder queryBuilder = new BooleanQuery.Builder();
-        
-        // be aware that the hashFunctionsFileName of the field must match the one you put the hashes in before.
-        queryBuilder.add(new BooleanClause(new TermQuery(new Term(paramField, hList.get(Math.min(hList.size(), i)))), BooleanClause.Occur.SHOULD));
-        
+        for (int i = 0; i < numHashes; i++) {
+            // be aware that the hashFunctionsFileName of the field must match the one you put the hashes in before.
+            queryBuilder.add(new BooleanClause(new TermQuery(new Term(paramField, hList.get(i))), BooleanClause.Occur.SHOULD));
+        }
         // this query is just for boosting the results with more matching hashes. We'd need to match it to all docs.
         //queryBuilder.add(new BooleanClause(new MatchAllDocsQuery(), BooleanClause.Occur.SHOULD));
         BooleanQuery query = queryBuilder.build();
