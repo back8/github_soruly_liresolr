@@ -1,6 +1,7 @@
 package net.semanticmetadata.lire.solr.tools;
 
 import net.semanticmetadata.lire.indexers.hashing.BitSampling;
+import net.semanticmetadata.lire.solr.HashingMetricSpacesManager;
 import net.semanticmetadata.lire.utils.CommandLineUtils;
 import org.xml.sax.SAXException;
 
@@ -26,12 +27,12 @@ public class FlickrSolrIndexingTool {
     static String helpMessage = "$> FlickrSolrIndexingTool -o <outfile.xml|auto> [-n <number_of_photos>] [-s]\n\n" +
             "Options\n" +
             "=======\n" +
-            "-s \t store the images localy as temp files.";
+            "-s \t store the images locally as temp files.";
     private static int numThreads = 8;
     protected static boolean saveDownloadedImages = false;
 
     public static void main(String[] args) throws ParserConfigurationException, SAXException, IOException, InterruptedException {
-        BitSampling.readHashFunctions();
+        HashingMetricSpacesManager.init();
         int numberOfImages = 20;
 
         Properties p = CommandLineUtils.getProperties(args, helpMessage, new String[]{"-o"});

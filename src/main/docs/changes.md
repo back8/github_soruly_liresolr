@@ -1,8 +1,30 @@
 # LireSolr Change Log
 
-**2017-05-27**
-* Updated to Solr 6.5.1
-* Updated docker image to Solr 6.5.1
+**2017-12-06**
+* Switched to max norm for importing generic double features.
+
+**2017-12-05**
+* Extraction with lireq from double histograms to short features
+* Documentation updates
+* changed default to ms=false
+
+**2017-12-04**
+* lire.html updates to current bootstrap and jquery versions
+* search.html for debugging (raw input of query URL)
+* ImportFromCSV, Apache CLI integrated & XmlMerge generified.
+
+**2017-12-01**
+* Performance tests on lirefunc + RandomAccessBinaryDocValues
+* Updated documentation on the LRUCache
+
+**2017-11-16**
+* Added merge tool based on DOM4j
+
+**2017-11-15**
+* Converged to Solr 7.5.0
+
+**2017-11-10**
+* Updated Docker file
 
 **2017-02-05**
 * Implemented image caching for FlickrDownloader tool and the respective use of the cache in the Python file for image classification.

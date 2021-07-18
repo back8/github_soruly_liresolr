@@ -37,6 +37,8 @@ dependencies {
     compile group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     // https://mvnrepository.com/artifact/commons-codec/commons-codec
     compile group: 'commons-codec', name: 'commons-codec', version: '1.11'
+    // https://mvnrepository.com/artifact/commons-cli/commons-cli
+    compile group: 'commons-cli', name: 'commons-cli', version: '1.4'
     // https://mvnrepository.com/artifact/com.sangupta/jopensurf
     compile group: 'com.sangupta', name: 'jopensurf', version: '1.0.0'
     // https://mvnrepository.com/artifact/org.bytedeco.javacpp-presets/opencv
@@ -45,6 +47,10 @@ dependencies {
     // ---< Helper files >---
     // https://mvnrepository.com/artifact/com.twelvemonkeys.imageio/imageio-jpeg
     compile group: 'com.twelvemonkeys.imageio', name: 'imageio-jpeg', version: '3.4.1'
+
+    // ---< Dom4j & Jaxen for XPath because StaX is often too complicated >---
+    compile 'org.dom4j:dom4j:2.1.1'
+    compile 'jaxen:jaxen:1.1.6'
 
     // ---< Current version of LIRE >---
     compile fileTree(dir: 'lib', include: '*.jar')
@@ -84,6 +90,8 @@ jar {
 task distForSolr(type: Copy, dependsOn: jar) {
     delete './dist'
     String path = './dist'
+    // change the path variable to copy it to your Solr installation directory ...
+    // String path = '../../Applications/solr-7.5.0/server/solr-webapp/webapp/WEB-INF/lib'
     String lsJar = 'liresolr.jar'
     String liJar = 'lire.jar'
     delete path + lsJar
@@ -117,12 +125,13 @@ task prepareForDockerImage(type: Copy, dependsOn: distForSolr) {
     from ('src/main/docker') into path
 }
 
-task createCommandlineDownloader(type: Jar, dependsOn: build) {
+task createFlickrDownloader(type: Jar, dependsOn: build) {
     archiveName = 'flickrdownloader.jar'
     destinationDir = project.getRootDir()
 
     from { Project.DEFAULT_BUILD_DIR_NAME + "/classes/main" }
-    from { zipTree("lib/LIRE-1.0_b04.jar") }
+    from { zipTree("lib/LIRE-1.0_b05.jar") }
+    from { Project.DEFAULT_BUILD_DIR_NAME + "/resources/main" }
 
     manifest.attributes(
             'Main-Class': 'net.semanticmetadata.lire.solr.tools.FlickrSolrIndexingTool',
@@ -136,6 +145,30 @@ task runParallelIndexer(type: JavaExec) {
     main = 'net.semanticmetadata.lire.solr.indexing.ParallelSolrIndexer'
 
     // arguments to pass to the application
-    args('-i /temp/images.lst -f -o /temp/images-out.xml -n 8'.split(' '))
+    args('-i images-wipo.lst -f -o images-wipo.xml -n 4'.split(' '))
+    /*
+     use the XML file like this:
+        curl http://localhost:8983/solr/lire/update  -H "Content-Type: text/xml" --data-binary @file.xml
+     and maybe then
+        curl http://localhost:8983/solr/lire/update?commit=true
+      */
+    //
+
+}
+
+task runImportFromCSV(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'net.semanticmetadata.lire.solr.indexing.ImportFromCSV'
+
+    // run this with 
+    // $> gradle runImportFromCSV --args='-i in.csv -o out.xml'
+}
+
+task runFlickrDownloader(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'net.semanticmetadata.lire.solr.tools.FlickrSolrIndexingTool'
+
+    // arguments to pass to the application
+    args('-o auto -n 20'.split(' '))
 }
 

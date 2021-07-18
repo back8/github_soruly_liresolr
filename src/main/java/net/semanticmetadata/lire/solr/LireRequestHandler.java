@@ -53,6 +53,10 @@ import java.util.TreeSet;
 
 import javax.imageio.ImageIO;
 
+import net.semanticmetadata.lire.imageanalysis.features.global.GenericGlobalShortFeature;
+import net.semanticmetadata.lire.solr.features.ShortFeatureCosineDistance;
+import net.semanticmetadata.lire.solr.tools.EncodeAndHashCSV;
+import net.semanticmetadata.lire.solr.tools.Utilities;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.document.Document;
@@ -124,8 +128,8 @@ public class LireRequestHandler extends RequestHandlerBase {
     /**
      * If metric spaces should be used instead of BitSampling.
      */
-    private boolean useMetricSpaces = true;
-    private static final boolean DEFAULT_USE_METRIC_SPACES = true;
+    private boolean useMetricSpaces = false;
+    private static final boolean DEFAULT_USE_METRIC_SPACES = false;
 
     static {
         HashingMetricSpacesManager.init(); // load reference points from disk.
@@ -152,7 +156,7 @@ public class LireRequestHandler extends RequestHandlerBase {
     @Override
     public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
         // (1) check if the necessary parameters are here
-        if (req.getParams().get("feature") != null) { // we are searching for hashes ...
+        if (req.getParams().get("hashes") != null) { // we are searching for hashes ... without hashes one should go for the lirefunc version.
             handleHashSearch(req, rsp); // not really supported, just here for legacy.
         } else if (req.getParams().get("url") != null) { // we are searching for an image based on an URL
             handleUrlSearch(req, rsp);
@@ -218,21 +222,26 @@ public class LireRequestHandler extends RequestHandlerBase {
                         bvBytesRef.bytes, bvBytesRef.offset, bvBytesRef.length);
 
                 Query query = null;
-                if (!useMetricSpaces) {
-                    // check singleton cache if the term stats can be cached.
-                    HashTermStatistics.addToStatistics(searcher, paramField);
-                    // Re-generating the hashes to save space (instead of storing them in the index)
-                    int[] hashes = BitSampling.generateHashes(queryFeature.getFeatureVector());
-                    query = createQuery(hashes, paramField, numberOfQueryTerms);
-                } else if (MetricSpaces.supportsFeature(queryFeature)) {
-                    // ----< Metric Spaces >-----
-                    int queryLength = (int) StatsUtils.clamp(numberOfQueryTerms * MetricSpaces.getPostingListLength(queryFeature), 3, MetricSpaces.getPostingListLength(queryFeature));
-                    String msQuery = MetricSpaces.generateBoostedQuery(queryFeature, queryLength);
-                    QueryParser qp = new QueryParser(paramField.replace("_ha", "_ms"), new WhitespaceAnalyzer());
-                    query = qp.parse(msQuery);
-                } else {
+                if (numberOfQueryTerms >= 0.90) {
                     query = new MatchAllDocsQuery();
-                    rsp.add("Error", "Feature not supported by MetricSpaces: " + queryFeature.getClass().getSimpleName());
+                    rsp.add("Note", "Switching to AllDocumentsQuery because accuracy is set higher than 0.9.");
+                } else {
+                    if (!useMetricSpaces) {
+                        // check singleton cache if the term stats can be cached.
+                        HashTermStatistics.addToStatistics(searcher, paramField);
+                        // Re-generating the hashes to save space (instead of storing them in the index)
+                        int[] hashes = BitSampling.generateHashes(queryFeature.getFeatureVector());
+                        query = createQuery(hashes, paramField, numberOfQueryTerms);
+                    } else if (MetricSpaces.supportsFeature(queryFeature)) {
+                        // ----< Metric Spaces >-----
+                        int queryLength = (int) StatsUtils.clamp(numberOfQueryTerms * MetricSpaces.getPostingListLength(queryFeature), 3, MetricSpaces.getPostingListLength(queryFeature));
+                        String msQuery = MetricSpaces.generateBoostedQuery(queryFeature, queryLength);
+                        QueryParser qp = new QueryParser(paramField.replace("_ha", "_ms"), new WhitespaceAnalyzer());
+                        query = qp.parse(msQuery);
+                    } else {
+                        query = new MatchAllDocsQuery();
+                        rsp.add("Error", "Feature not supported by MetricSpaces: " + queryFeature.getClass().getSimpleName());
+                    }
                 }
                 doSearch(req, rsp, searcher, paramField, paramRows, getFilterQueries(req), query, queryFeature);
             } else {
@@ -247,6 +256,7 @@ public class LireRequestHandler extends RequestHandlerBase {
     /**
      * Parses the fq param and adds it as a list of filter queries or reverts to null if nothing is found
      * or an Exception is thrown.
+     *
      * @param req
      * @return either a query from the QueryParser or null
      */
@@ -525,17 +535,30 @@ public class LireRequestHandler extends RequestHandlerBase {
         GlobalFeature feat;
         // wrapping the whole part in the try
         try {
-            BufferedImage img = ImageIO.read(new URL(paramUrl).openStream());
-            img = ImageUtils.trimWhiteSpace(img);
-            // getting the right feature per field:
-            if (FeatureRegistry.getClassForHashField(paramField) == null) {
-                feat = new ColorLayout();
+            if (!paramField.startsWith("sf")) {
+                BufferedImage img = ImageIO.read(new URL(paramUrl).openStream());
+                img = ImageUtils.trimWhiteSpace(img);
+                // getting the right feature per field:
+                if (FeatureRegistry.getClassForHashField(paramField) == null) {
+                    feat = new ColorLayout();
+                } else {
+                    feat = (GlobalFeature) FeatureRegistry.getClassForHashField(paramField).newInstance();
+                }
+                feat.extract(img);
             } else {
-                feat = (GlobalFeature) FeatureRegistry.getClassForHashField(paramField).newInstance();
+                // we assume that this is a generic short feature, like it is used in context of deep features.
+                feat = new ShortFeatureCosineDistance();
+                String[] featureDoublesAsStrings = paramUrl.split(",");
+                double[] featureDoubles = new double[featureDoublesAsStrings.length];
+                for (int i = 0; i < featureDoubles.length; i++) {
+                    featureDoubles[i] = Double.parseDouble(featureDoublesAsStrings[i]);
+                }
+                featureDoubles = Utilities.toCutOffArray(featureDoubles, EncodeAndHashCSV.TOP_N_CLASSES); // max norm
+                short[] featureShort = Utilities.toShortArray(featureDoubles); // quantize
+                ((ShortFeatureCosineDistance) feat).setData(featureShort);
             }
-            feat.extract(img);
             rsp.add("histogram", Base64.encodeBase64String(feat.getByteArrayRepresentation()));
-            if (!useMetricSpaces || true) { // only if the field is available was the original way
+            if (!useMetricSpaces || true) { // select the most distinguishing hashes and deliver them back.
                 HashTermStatistics.addToStatistics(req.getSearcher(), paramField);
                 int[] hashes = BitSampling.generateHashes(feat.getFeatureVector());
                 List<String> hashStrings = orderHashes(hashes, paramField, false);
@@ -691,7 +714,7 @@ public class LireRequestHandler extends RequestHandlerBase {
      * @param searcher      the actual index searcher object to search the index
      * @param hashFieldName the name of the field the hashes can be found
      * @param maximumHits   the maximum number of hits, the smaller the faster
-     * @param filterQueries   can be null
+     * @param filterQueries can be null
      * @param query         the (Boolean) query for querying the candidates from the IndexSearcher
      * @param queryFeature  the image feature used for re-ranking the results
      * @throws IOException
@@ -885,8 +908,8 @@ public class LireRequestHandler extends RequestHandlerBase {
      * while deleting those that are not in the index at all. Meaning: terms sorted by docFreq ascending, removing
      * those with docFreq == 0
      *
-     * @param hashes     the int[] of hashes
-     * @param paramField the field in the index.
+     * @param hashes                 the int[] of hashes
+     * @param paramField             the field in the index.
      * @param removeZeroDocFreqTerms
      * @return
      */

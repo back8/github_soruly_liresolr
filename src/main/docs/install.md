@@ -8,14 +8,14 @@ $> bin/solr start
 ```
 Then one should basically create a core using
 ```
-$> bin/solr create_collection -c lire -d basic_configs
+$> bin/solr create_core -c lire
 ```
 Then you are up to changing the config files to your need. To check if it worked point your browser to http://localhost:[port]/ whereas the port should be stated in your shell, where you started Solr.
 
 ## Where to learn more?
 I assume the better way to learn to handle Solr is by reading the Solr documentation:
 
-1. [Solr Reference Guide](https://cwiki.apache.org/confluence/display/solr/Getting+Started)
+1. [Solr Reference Guide](https://lucene.apache.org/solr/guide/7_5/getting-started.html)
 1. [Solr web page](http://lucene.apache.org/solr/)
 1. [Using Xml messages to update the index](https://wiki.apache.org/solr/UpdateXmlMessages)
 
