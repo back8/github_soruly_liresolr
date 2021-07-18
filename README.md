@@ -1,34 +1,29 @@
-## liresolr
+LIRE Solr Integration Project
+=============================
 
-[![Build Status](https://travis-ci.org/soruly/liresolr.svg?branch=master)](https://travis-ci.org/soruly/liresolr)
+This is a Solr plugin for the LIRE content based image retrieval library, so basically it's for indexing images and then finding similar (looking) ones. The original library can be found at [Github](https://github.com/dermotte/lire)
 
-This is a fork of [dermotte/liresolr](https://github.com/dermotte/liresolr) customized for [soruly/sola](https://github.com/soruly/sola)
+The LIRE Solr plugin includes a `RequestHandler` for searching, an `EntityProcessor` for indexing, a `ValueSource` Parser for content based re-ranking and a parallel indexing application.
 
-### Changes in this fork
-- Removed all default feature class from ParallelSolrIndexer to speed up indexing
-- Instead of using last n% of query terms, search query terms one by one
+An outdated demo can be found at [http://demo-itec.uni-klu.ac.at/liredemo/](http://demo-itec.uni-klu.ac.at/liredemo/). If you want to give it a try yourself, there is a [docker image](https://hub.docker.com/r/dermotte/liresolr/), which you use to run a pre-configured core on a Solr server. There's also a tool to create import XML files from Flickr. More information is available at [src/main/docs/docker.md](src/main/docs/docker.md).
 
-### Additional Features
-- Search by file path
-- Analyze image by file path
-- Search by file upload (HTTP POST)
+If you need help on the plugin, please use the mailing list at [lire-dev mailing list](http://groups.google.com/group/lire-dev) to ask questions. Additional documentation is available on [src/main/docs/index.md](src/main/docs/index.md) If you need help with your project, please contact me, we also offer consulting services.
 
-### Requirements
-- openJDK-1.8.0 or Java JDK 8
-- [Apache Solr 7](http://lucene.apache.org/solr/)
+If you use LIRE Solr for scientific purposes, please cite the following paper: 
 
-### Installing
-- Download jar files built by travis-CI from [GitHub Releases](https://github.com/soruly/liresolr/releases)
-- Copy both `lire.jar` and `liresolr.jar` to `/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/`
-- restart solr
+> *Mathias Lux and Glenn Macstravic* "The LIRE Request Handler: A Solr Plug-In for Large Scale Content Based Image Retrieval." *MultiMedia Modeling. Springer International Publishing, 2014*. [Springer](http://link.springer.com/chapter/10.1007/978-3-319-04117-9_39)
 
-These jar files are already included in `soruly/sola`
+The `RequestHandler` supports the following different types of queries
 
-### Developing
-- Linux: `./gradlew distForSolr`
-- Windows: `gradlew.bat distForSolr`
+1.  Get random images ...
+2.  Get images that are looking like the one with id ...
+3.  Get images looking like the one found at url ...
+4.  Get images with a feature vector like ...
+5.  Extract histogram and hashes from an image URL ...
 
-In `./dist` folder, you can find the compiled jar files
+Preliminaries
+-------------
+Supported values for feature field parameters, e.g. `lireq?field=cl` are ...
 
 -  **ph** .. PHOG (pyramid histogram of oriented gradients)
 -  **oh** .. OpponentHistogram (simple color his    togram in the opponent color space)
@@ -43,27 +38,16 @@ In `./dist` folder, you can find the compiled jar files
 -  **fo** .. FuzzyOpponentHistogram (fuzzy color histogram)
 -  **sf** .. GenericGlobalShortFeature (generic feature used to search for deep features in LireSolr)
 
-For example, with terms A, B, C, D, E, F, G, H in ascending order of popularity:
+Also consult the Lire project and the documentation of features there. You can also extend the list of features by changing the `FeatureRegistry` in the LireSolr source.
 
-dermotte/liresolr:
-- accuracy 0.125 means search in A
-- accuracy 0.250 means search in A+B
-- accuracy 0.375 means search in A+B+C
+The field parameter (partially) works with the LIRE request handler:
 
-soruly/liresolr:
-- accuracy 0 means search in A
-- accuracy 1 means search in B
-- accuracy 2 means search in C
-```
-/lireq?&field=cl_ha&ms=false&url=https://url-to/image.jpg&accuracy=0&candidates=100000
-```
-Given that most corrent search results (>90%) can be found with just one term. The iterative approach search is faster on average as it has reduced search space. Applications can decide when to stop searching. If the first search is not good enough, it can search again in next query term.
+-  **fl** .. Fields, give them as a comma or space separated list, like "fl=title,id,score". Note that "*" is denoting all fields and score adds the distance (which already comes with the "d" fields) in an additional score field.
+-  **fq** .. Filter query, give them as a comma separated list in the format "fq=tags:dog tags:funny". No wildcards and no spaces in terms supported for now.
 
-#### Search by file path
-Just POST files in binary format without any file/url parameters
-```
-/lireq?&field=cl_ha&ms=false&file=/path/to/image.jpg&accuracy=0&candidates=100000
-```
+Getting random images
+---------------------
+Returns randomly chosen images from the index. While it does not seem extremely helpful, it's actually great to find images to be used for example queries. 
 
 Parameters:
 
@@ -295,7 +279,15 @@ The `outfile` from `ParallelIndexer` has to be send to the Solr server. Assuming
 You need to commit you changes! If your outfile exceeds 500MB, curl might complain. Then use split to cut it into pieces and repair the root tags (`<add>` and `</add>`). Here is an example how to do that with bash & linux (use *Git Bash* on Windows) under the assumption that the split leads to files *{0, 1, 2, ..., n}*
 
 ```
-/lireq?&field=cl_ha&ms=false&accuracy=0&candidates=100000
+$> split -l 100000 -d images.xml images_
+$> echo "</add>" >> images_00 
+$> echo "</add>" >> images_01
+...
+$> echo "</add>" >> images_<n-1> 
+$> sed -i.old '1s;^;<add>;' images_01
+$> sed -i.old '1s;^;<add>;' images_02
+...
+$> sed -i.old '1s;^;<add>;' images_<n>
 ```
 
 For small output files you may use the file upload option in the Solr admin interface. 
